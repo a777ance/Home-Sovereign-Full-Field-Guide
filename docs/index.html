@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home DNS — Field Guide</title>
+<meta name="description" content="Interactive step-by-step guide to building a home DNS + ad-blocking (+ optional VPN/monitoring) stack — Pi-hole + Unbound, personalized with your own IPs.">
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --bg:#eef1f2; --panel:#ffffff; --panel-2:#f4f6f7; --ink:#1c2530; --muted:#5b6672; --line:#d8dee3;
+  --accent:#2f6fb0; --accent-ink:#ffffff; --brass:#a97e2f;
+  --good:#2f8f5b; --good-bg:#e3f3ea; --warn:#b3791f; --warn-bg:#fbf0dd; --danger:#c14545; --danger-bg:#fbe6e6;
+  --term-bg:#161c24; --term-ink:#dbe6ee; --term-accent:#7fb3e0;
+  --radius:10px;
+  --font-body:'Gill Sans MT','Gill Sans',Calibri,'Trebuchet MS',sans-serif;
+  --font-mono:ui-monospace,'SF Mono','Cascadia Code','Consolas',monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#10161d; --panel:#1a222c; --panel-2:#1f2833; --ink:#e8ecf0; --muted:#93a1ae; --line:#2a3540;
+    --accent:#5b9de0; --accent-ink:#0c1520; --brass:#d1a256;
+    --good:#4cb37f; --good-bg:#173026; --warn:#d1a256; --warn-bg:#302716; --danger:#e07a7a; --danger-bg:#331a1a;
+    --term-bg:#0b0f14; --term-ink:#cddbe6; --term-accent:#8fc1ea;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10161d; --panel:#1a222c; --panel-2:#1f2833; --ink:#e8ecf0; --muted:#93a1ae; --line:#2a3540;
+  --accent:#5b9de0; --accent-ink:#0c1520; --brass:#d1a256;
+  --good:#4cb37f; --good-bg:#173026; --warn:#d1a256; --warn-bg:#302716; --danger:#e07a7a; --danger-bg:#331a1a;
+  --term-bg:#0b0f14; --term-ink:#cddbe6; --term-accent:#8fc1ea;
+}
+:root[data-theme="light"]{
+  --bg:#eef1f2; --panel:#ffffff; --panel-2:#f4f6f7; --ink:#1c2530; --muted:#5b6672; --line:#d8dee3;
+  --accent:#2f6fb0; --accent-ink:#ffffff; --brass:#a97e2f;
+  --good:#2f8f5b; --good-bg:#e3f3ea; --warn:#b3791f; --warn-bg:#fbf0dd; --danger:#c14545; --danger-bg:#fbe6e6;
+  --term-bg:#161c24; --term-ink:#dbe6ee; --term-accent:#7fb3e0;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  font-family:var(--font-body); background:var(--bg); color:var(--ink);
+  line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+.page{max-width:860px; margin:0 auto; padding:0 20px 80px;}
+a{color:var(--accent);}
+h1,h2,h3{text-wrap:balance; font-weight:700;}
+code, pre, .mono{font-family:var(--font-mono);}
+input:focus-visible, button:focus-visible, summary:focus-visible{
+  outline:2px solid var(--accent); outline-offset:2px; border-radius:4px;
+}
+@media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important;} }
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky; top:0; z-index:20; background:var(--bg);
+  padding:16px 0 12px; border-bottom:1px solid var(--line);
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px;
+}
+.brand{display:flex; align-items:center; gap:11px;}
+.brand-mark{
+  width:38px; height:38px; border-radius:9px; flex:none;
+  background:linear-gradient(150deg, var(--accent), #163a5c);
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-weight:700; font-size:15px; letter-spacing:0.02em;
+}
+.brand-name{font-size:16.5px; font-weight:700; letter-spacing:0.01em;}
+.brand-sub{font-size:11.5px; color:var(--muted);}
+.progress-wrap{display:flex; align-items:center; gap:10px; min-width:200px;}
+.progress-track{width:130px; height:8px; border-radius:5px; background:var(--line); overflow:hidden;}
+.progress-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--brass), var(--accent)); transition:width .25s ease;}
+.progress-label{font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap;}
+
+/* ---------- generic section chrome ---------- */
+section, .step, .setup-panel, .toc, .diagram, .build-order-strip{margin-top:34px;}
+.eyebrow{
+  font-size:11px; text-transform:uppercase; letter-spacing:0.13em; color:var(--brass); font-weight:700; margin-bottom:6px;
+}
+h2{font-size:19px; margin-bottom:4px;}
+.lede{font-size:15.5px; max-width:65ch; color:var(--ink);}
+.lede + .lede{margin-top:10px;}
+
+/* ---------- stat tiles ---------- */
+.stat-row{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:18px;}
+.stat{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px;
+}
+.stat .v{font-size:18px; font-weight:700; font-variant-numeric:tabular-nums;}
+.stat .k{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-top:2px;}
+@media (max-width:640px){.stat-row{grid-template-columns:repeat(2,1fr);}}
+
+/* ---------- setup panel ---------- */
+.setup-panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px 22px;}
+.field-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-top:14px;}
+.field-grid label{display:flex; flex-direction:column; gap:5px; font-size:12.5px; color:var(--muted); font-weight:600;}
+.field-grid input{
+  font-family:var(--font-mono); font-size:13.5px; color:var(--ink); background:var(--panel-2);
+  border:1px solid var(--line); border-radius:7px; padding:8px 10px;
+}
+.toggle-grid{display:flex; flex-direction:column; gap:10px; margin-top:16px; padding-top:16px; border-top:1px solid var(--line);}
+.toggle{display:flex; align-items:flex-start; gap:9px; font-size:14px; cursor:pointer;}
+.toggle input{margin-top:3px; flex:none;}
+.toggle .desc{display:block; font-size:12px; color:var(--muted); font-weight:400;}
+.toggle.sub{margin-left:26px; opacity:0.45; pointer-events:none;}
+.toggle.sub.active{opacity:1; pointer-events:auto;}
+@media (max-width:640px){.field-grid{grid-template-columns:1fr;}}
+
+/* ---------- toc ---------- */
+.toc-note{font-size:12px; font-weight:400; color:var(--muted); text-transform:none; letter-spacing:0;}
+.toc-list{list-style:none; margin-top:12px; display:flex; flex-direction:column; gap:2px;}
+.toc-list li a{
+  display:flex; align-items:baseline; gap:10px; padding:7px 10px; border-radius:7px; text-decoration:none; color:var(--ink); font-size:14px;
+}
+.toc-list li a:hover{background:var(--panel);}
+.toc-list .n{font-family:var(--font-mono); font-size:12px; color:var(--brass); font-weight:700; min-width:2.6em;}
+.toc-list .chip{margin-left:auto; font-size:10px;}
+
+/* ---------- diagram ---------- */
+.diagram{
+  background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px;
+  display:flex; align-items:stretch; gap:0; overflow-x:auto;
+}
+.dnode{
+  flex:1 1 0; min-width:150px; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+  background:var(--panel-2); display:flex; flex-direction:column; gap:4px; justify-content:center;
+}
+.dnode .t{font-size:12.5px; font-weight:700;}
+.dnode .s{font-size:11px; color:var(--muted); font-family:var(--font-mono);}
+.dnode.box{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset;}
+.darrow{flex:none; width:34px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:16px;}
+@media (max-width:700px){.diagram{flex-direction:column;} .darrow{width:auto; height:22px; transform:rotate(90deg);}}
+
+/* ---------- build order strip ---------- */
+.build-order-strip{
+  background:var(--panel-2); border:1px dashed var(--line); border-radius:10px; padding:11px 16px;
+  font-family:var(--font-mono); font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+}
+.build-order-strip b{color:var(--ink);}
+.build-order-strip .opt{color:var(--brass);}
+
+/* ---------- step cards ---------- */
+.steps-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;}
+.bulk-toggle{font-size:12px; color:var(--accent); background:none; border:none; cursor:pointer; font-weight:600; padding:4px;}
+.step{
+  background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; scroll-margin-top:90px;
+}
+.step[data-hidden="true"]{display:none;}
+.step-head{
+  display:flex; align-items:center; gap:12px; padding:15px 18px; cursor:pointer; user-select:none; border:none; background:none; width:100%; text-align:left;
+}
+.step-num{
+  font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--accent);
+  background:var(--panel-2); border:1px solid var(--line); border-radius:6px; padding:3px 8px; flex:none;
+}
+.step-title{font-size:15.5px; font-weight:700; flex:1;}
+.step-chip{font-size:10px; text-transform:uppercase; letter-spacing:0.07em; font-weight:700; padding:3px 8px; border-radius:20px; flex:none;}
+.step-chip.core{background:var(--panel-2); color:var(--muted);}
+.step-chip.optional{background:var(--warn-bg); color:var(--warn);}
+.chevron{transition:transform .15s ease; color:var(--muted); flex:none;}
+.step[data-open="false"] .chevron{transform:rotate(-90deg);}
+.step-done-wrap{display:flex; align-items:center; gap:7px; padding:0 18px 15px; margin-top:-6px;}
+.step-done-wrap label{display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); cursor:pointer; font-weight:600;}
+.step[data-done="true"] .step-title{color:var(--good);}
+.step[data-done="true"] .step-num{color:var(--good); border-color:var(--good);}
+.step-body{padding:0 18px 20px; border-top:1px solid var(--line);}
+.step[data-open="false"] .step-body{display:none;}
+.step-why{font-size:13.5px; color:var(--muted); margin:14px 0 4px; max-width:65ch;}
+.substeps{list-style:none; counter-reset:sub; margin-top:14px; display:flex; flex-direction:column; gap:14px;}
+.substeps > li{counter-increment:sub; padding-left:30px; position:relative; font-size:14px;}
+.substeps > li::before{
+  content:counter(sub); position:absolute; left:0; top:1px; width:21px; height:21px; border-radius:50%;
+  background:var(--panel-2); border:1px solid var(--line); color:var(--muted); font-size:11px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; font-family:var(--font-mono);
+}
+.substeps p{margin-bottom:6px;}
+.field-table{width:100%; border-collapse:collapse; font-size:13px; margin-top:8px;}
+.field-table th, .field-table td{text-align:left; padding:6px 10px; border-bottom:1px solid var(--line);}
+.field-table th{color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em;}
+.table-wrap{overflow-x:auto;}
+.callout{border-left:3px solid var(--brass); background:var(--warn-bg); border-radius:0 8px 8px 0; padding:9px 13px; font-size:12.5px; margin-top:8px;}
+.callout.danger{border-left-color:var(--danger); background:var(--danger-bg);}
+.verify-box{
+  margin-top:16px; background:var(--good-bg); border:1px solid var(--good); border-radius:8px; padding:12px 14px;
+}
+.verify-box .vt{font-size:11px; text-transform:uppercase; letter-spacing:0.08em; font-weight:700; color:var(--good); margin-bottom:6px;}
+
+/* ---------- terminal command blocks ---------- */
+.cmd{background:var(--term-bg); border-radius:9px; overflow:hidden; margin-top:8px;}
+.cmd-bar{
+  display:flex; align-items:center; justify-content:space-between; padding:6px 10px;
+  background:rgba(255,255,255,0.04); font-size:10.5px; color:#8593a1; font-family:var(--font-mono);
+}
+.copy-btn{
+  font-family:var(--font-body); font-size:11px; font-weight:600; color:var(--term-accent);
+  background:none; border:1px solid rgba(127,179,224,0.35); border-radius:5px; padding:2px 9px; cursor:pointer;
+}
+.copy-btn:hover{background:rgba(127,179,224,0.12);}
+.cmd pre{margin:0; padding:12px 14px; overflow-x:auto;}
+.cmd code{color:var(--term-ink); font-size:12.8px; line-height:1.6; white-space:pre;}
+.tok{color:var(--term-accent); font-weight:600; border-bottom:1px dotted rgba(127,179,224,0.5);}
+
+/* ---------- footer sections ---------- */
+.faq-item{border-bottom:1px solid var(--line); padding:14px 0;}
+.faq-item summary{font-weight:700; font-size:14.5px; cursor:pointer; list-style:none;}
+.faq-item summary::-webkit-details-marker{display:none;}
+.faq-item summary::before{content:"+ "; color:var(--brass);}
+.faq-item[open] summary::before{content:"– ";}
+.faq-item p{margin-top:8px; font-size:13.5px; color:var(--muted);}
+footer{margin-top:44px; padding-top:20px; border-top:1px solid var(--line); font-size:12px; color:var(--muted); line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">◈</div>
+      <div><div class="brand-name">Home DNS — Field Guide</div><div class="brand-sub">a private, ad-free network in one build session</div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">0 of 6 steps done</div>
+    </div>
+  </header>
+
+  <section class="intro">
+    <div class="eyebrow">Why build this</div>
+    <p class="lede">Every device in your house — phones, laptops, TVs — asks a resolver "where is this site?" thousands of times a day, and by default that resolver is your ISP or a public one that can log every domain you touch. This guide turns one small always-on computer into your own resolver: it blocks ads and trackers network-wide, resolves everything sensitive itself (no third party sees it), and optionally gives you the same protection on your phone over cellular.</p>
+    <p class="lede">Fill in your own values once below — every command on this page updates to match, ready to copy.</p>
+    <div class="stat-row">
+      <div class="stat"><div class="v">$30–70</div><div class="k">Hardware, used</div></div>
+      <div class="stat"><div class="v">~10 W</div><div class="k">Power draw</div></div>
+      <div class="stat"><div class="v">2–4 hrs</div><div class="k">Core build time</div></div>
+      <div class="stat"><div class="v">Terminal</div><div class="k">Comfort level needed</div></div>
+    </div>
+  </section>
+
+  <section class="setup-panel" id="setupPanel">
+    <div class="eyebrow">Step 0 of the app, not the build</div>
+    <h2>Your setup</h2>
+    <p class="lede" style="font-size:13.5px;">Fill this in once — it's saved on this device and every command block below updates live. Defaults are the most common home-router values; check yours if unsure.</p>
+    <div class="field-grid">
+      <label>Your name<input id="fName" placeholder="e.g. Sam" autocomplete="off"></label>
+      <label>Router's LAN IP<input id="fRouter" value="192.168.1.1" autocomplete="off"></label>
+      <label>Static IP you'll reserve for the box<input id="fBox" value="192.168.1.50" autocomplete="off"></label>
+      <label>Linux username on the box<input id="fUser" value="you" autocomplete="off"></label>
+      <label>Box's network interface name<input id="fWan" value="eth0" autocomplete="off"></label>
+      <label>Your upload speed (Mbit, for CAKE)<input id="fUpload" value="80" autocomplete="off"></label>
+    </div>
+    <div class="toggle-grid">
+      <label class="toggle">
+        <input type="checkbox" id="tVpn">
+        <span>Remote access from your phone
+          <span class="desc">Adds Step 7 — a self-hosted WireGuard VPN so your phone gets the same ad-blocking and private DNS on cellular data.</span>
+        </span>
+      </label>
+      <label class="toggle sub" id="tCakeWrap">
+        <input type="checkbox" id="tCake">
+        <span>Also fix bufferbloat on VPN traffic
+          <span class="desc">Adds Step 1 — without it, using the VPN under load (uploading, video calls) can add seconds of lag.</span>
+        </span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="tMon">
+        <span>Monitoring dashboard
+          <span class="desc">Adds Step 8 — a status page (Uptime Kuma) that tells you when something breaks before your household notices.</span>
+        </span>
+      </label>
+    </div>
+  </section>
+
+  <nav class="toc" aria-label="Build blocks">
+    <h2>Contents <span class="toc-note">— matches the build order below, Step 0 first</span></h2>
+    <ol class="toc-list" id="tocList"></ol>
+  </nav>
+
+  <section class="diagram" aria-label="Network diagram">
+    <div class="dnode"><div class="t">Internet</div><div class="s">your ISP</div></div>
+    <div class="darrow">→</div>
+    <div class="dnode"><div class="t">Your router</div><div class="s" id="dRouter">192.168.1.1</div></div>
+    <div class="darrow">→</div>
+    <div class="dnode box"><div class="t">Your box</div><div class="s" id="dBox">192.168.1.50</div><div class="s">Pi-hole → Unbound</div></div>
+    <div class="darrow">→</div>
+    <div class="dnode"><div class="t">Phones, laptops, TVs</div><div class="s">every query filtered + private</div></div>
+  </section>
+
+  <div class="build-order-strip">
+    <span><b>Actual build order:</b> 0 → <span class="opt">1</span> → 2 → 3 → 4+5 → 6 → <span class="opt">7</span> → <span class="opt">8</span> → 11</span>
+    <span style="margin-left:auto; color:var(--brass);">amber = optional, shown/hidden by your toggles above</span>
+  </div>
+
+  <main id="stepsContainer">
+    <div class="steps-head">
+      <h2 style="margin-top:0;">Build blocks</h2>
+      <button class="bulk-toggle" id="bulkToggle">Collapse all</button>
+    </div>
+
+    <!-- STEP 0 -->
+    <article class="step" id="step-0" data-step="0" data-optional="false" data-open="true" data-done="false">
+      <button class="step-head" data-toggle>
+        <span class="step-num">Step 0</span>
+        <span class="step-title">Reserve a fixed IP on your router</span>
+        <span class="step-chip core">core · start here</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="step-done-wrap"><label><input type="checkbox" data-done-id="0"> Mark done</label></div>
+      <div class="step-body">
+        <p class="step-why">If the box's address ever changes, every device pointed at it loses DNS at once. A DHCP reservation pins it permanently before anything else is built on top.</p>
+        <ol class="substeps">
+          <li><p>Find the box's MAC address:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>ip link show <span class="tok" data-tok="wan">eth0</span></code></pre></div>
+          </li>
+          <li><p>Log into your router at <code class="mono tok" data-tok="router">192.168.1.1</code> and find the reservation page — <b>LAN Setup</b> (Netgear), <b>Address Reservation</b> (TP-Link), or <b>LAN → DHCP Server</b> (ASUS).</p></li>
+          <li><p>Reserve <span class="tok" data-tok="box">192.168.1.50</span> for that MAC address, save, and give the router a minute to apply it — some models reboot.</p></li>
+        </ol>
+        <div class="verify-box">
+          <div class="vt">Verify</div>
+          <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>ip a</code></pre></div>
+          <p style="font-size:12.5px; margin-top:6px;">Confirms <span class="tok" data-tok="box">192.168.1.50</span> — reboot the box once and check again, since the whole point is that it doesn't move.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- STEP 1 -->
+    <article class="step" id="step-1" data-step="1" data-optional="true" data-open="true" data-done="false">
+      <button class="step-head" data-toggle>
+        <span class="step-num">Step 1</span>
+        <span class="step-title">CAKE — fix VPN bufferbloat</span>
+        <span class="step-chip optional">optional</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="step-done-wrap"><label><input type="checkbox" data-done-id="1"> Mark done</label></div>
+      <div class="step-body">
+        <p class="step-why">Only matters once you route real traffic through the box (Step 7's VPN) — without shaping, saturating your upload adds hundreds of milliseconds of lag to everything else in the tunnel, video calls included. CAKE fixes it by keeping the queue short.</p>
+        <ol class="substeps">
+          <li><p>Run a real speed test and use roughly 85% of your measured upload as the shaping ceiling — leaving headroom is what actually kills the bufferbloat, so don't just use your ISP's advertised number.</p></li>
+          <li><p>Apply CAKE on egress:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>sudo tc qdisc add dev <span class="tok" data-tok="wan">eth0</span> root cake bandwidth <span class="tok" data-tok="upload">80</span>mbit</code></pre></div>
+          </li>
+          <li><p>That command doesn't survive a reboot on its own — add a tiny systemd oneshot unit that re-runs it at boot, or install the <code>sqm-scripts</code> package for a config file that persists automatically.</p></li>
+        </ol>
+        <div class="verify-box">
+          <div class="vt">Verify</div>
+          <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>tc qdisc show dev <span class="tok" data-tok="wan">eth0</span></code></pre></div>
+          <p style="font-size:12.5px; margin-top:6px;">Run a bufferbloat test (e.g. <span class="mono">waveform.com/tools/bufferbloat</span>) with the VPN under load, before and after — loaded latency should drop from hundreds of ms to near-idle.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- STEP 2 -->
+    <article class="step" id="step-2" data-step="2" data-optional="false" data-open="true" data-done="false">
+      <button class="step-head" data-toggle>
+        <span class="step-num">Step 2</span>
+        <span class="step-title">Unbound — your private recursive resolver</span>
+        <span class="step-chip core">core</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="step-done-wrap"><label><input type="checkbox" data-done-id="2"> Mark done</label></div>
+      <div class="step-body">
+        <p class="step-why">This is the actual decision point. Instead of asking a company's resolver "where is chase.com?", Unbound walks the DNS hierarchy itself — root → <code>.com</code> → chase.com's own nameservers — so no single third party ever sees your full lookup history, and DNSSEC rejects tampered answers along the way.</p>
+        <ol class="substeps">
+          <li><p>Install, fetch root hints and the DNSSEC trust anchor:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>sudo apt update && sudo apt install -y unbound ca-certificates
+sudo curl -o /var/lib/unbound/root.hints https://www.internic.net/domain/named.root
+sudo unbound-anchor -a /var/lib/unbound/root.key
+sudo chown unbound:unbound /var/lib/unbound/root.key</code></pre></div>
+          </li>
+          <li><p>Write the config — listens on <code>5335</code> so Pi-hole (which owns port 53) can sit in front of it:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>sudo tee /etc/unbound/unbound.conf.d/server.conf &lt;&lt;'EOF'
+server:
+    interface: 127.0.0.1
+    port: 5335
+    access-control: 127.0.0.1/32 allow
+    do-ip4: yes
+    do-udp: yes
+    do-tcp: yes
+    hide-identity: yes
+    hide-version: yes
+    harden-glue: yes
+    harden-dnssec-stripped: yes
+    use-caps-for-id: yes
+    qname-minimisation: yes
+    prefetch: yes
+    root-hints: "/var/lib/unbound/root.hints"
+    auto-trust-anchor-file: "/var/lib/unbound/root.key"
+EOF
+sudo unbound-checkconf
+sudo systemctl enable --now unbound</code></pre></div>
+          </li>
+        </ol>
+        <div class="verify-box">
+          <div class="vt">Verify</div>
+          <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>dig @127.0.0.1 -p 5335 example.com +dnssec | grep "ad;"</code></pre></div>
+          <p style="font-size:12.5px; margin-top:6px;">The <code>ad</code> (authenticated data) flag means DNSSEC validation is live — a tampered answer would be rejected instead of trusted.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- STEP 3 -->
+    <article class="step" id="step-3" data-step="3" data-optional="false" data-open="true" data-done="false">
+      <button class="step-head" data-toggle>
+        <span class="step-num">Step 3</span>
+        <span class="step-title">Install Docker</span>
+        <span class="step-chip core">core</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="step-done-wrap"><label><input type="checkbox" data-done-id="3"> Mark done</label></div>
+      <div class="step-body">
+        <p class="step-why">Pi-hole and the optional monitoring dashboard both run as containers — from Docker's own repo, not the older <code>docker.io</code> Ubuntu package.</p>
+        <ol class="substeps">
+          <li><p>Add Docker's repository and install:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+  https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+sudo usermod -aG docker <span class="tok" data-tok="user">you</span></code></pre></div>
+          </li>
+          <li><p>Log out and back in (or run <code>exec su -l <span class="tok" data-tok="user">you</span></code> in the same shell) — the group change isn't active in your current session. Skipping this shows "permission denied on socket" the moment you run <code>docker compose</code>.</p></li>
+        </ol>
+        <div class="verify-box"><div class="vt">Verify</div><div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>docker run hello-world</code></pre></div></div>
+      </div>
+    </article>
+
+    <!-- STEP 4+5 -->
+    <article class="step" id="step-45" data-step="4+5" data-optional="false" data-open="true" data-done="false">
+      <button class="step-head" data-toggle>
+        <span class="step-num">Step 4+5</span>
+        <span class="step-title">Free up port 53, then start Pi-hole</span>
+        <span class="step-chip core">core</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="step-done-wrap"><label><input type="checkbox" data-done-id="45"> Mark done</label></div>
+      <div class="step-body">
+        <p class="step-why">Ubuntu's own DNS stub already sits on port 53. Pi-hole needs that port for itself, so it has to be freed first — and since freeing it also disconnects the box's own DNS, both moves happen together so the box is never left without name resolution.</p>
+        <ol class="substeps">
+          <li><p><b>Part A — hand the box's own DNS to public resolvers and free the port:</b></p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>sudo mkdir -p /etc/systemd/resolved.conf.d
+sudo tee /etc/systemd/resolved.conf.d/host-dns.conf &lt;&lt;'EOF'
+[Resolve]
+DNS=9.9.9.9 1.1.1.1
+DNSStubListener=no
+EOF
+sudo systemctl restart systemd-resolved
+sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
+getent hosts security.ubuntu.com   # must return an IP
+sudo ss -ulpn 'sport = :53'        # must show nothing yet</code></pre></div>
+          </li>
+          <li><p><b>Part B — bring up Pi-hole:</b></p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>mkdir -p ~/pihole && cd ~/pihole
+cat > docker-compose.yml &lt;&lt;'EOF'
+services:
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    network_mode: host
+    environment:
+      TZ: 'America/New_York'
+      FTLCONF_webserver_api_password: 'CHANGE_ME'
+      FTLCONF_dns_upstreams: '127.0.0.1#5335'
+      FTLCONF_dns_listeningMode: 'all'
+    volumes:
+      - './etc-pihole:/etc/pihole'
+    restart: unless-stopped
+EOF
+nano docker-compose.yml   # set a real password + your timezone before starting
+docker compose up -d</code></pre></div>
+          </li>
+          <li><p>Open <code class="mono">http://<span class="tok" data-tok="box">192.168.1.50</span>:8080/admin/</code>, log in with the password you set, and confirm <b>Settings → DNS</b> shows upstream <code>127.0.0.1#5335</code> with no public resolvers checked — Pi-hole hands everything to Unbound, which owns the privacy/speed split.</p></li>
+        </ol>
+        <div class="verify-box">
+          <div class="vt">Verify</div>
+          <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>docker compose logs pihole | grep -i listening</code></pre></div>
+          <p style="font-size:12.5px; margin-top:6px;">If it can't bind :53, the stub listener is still up — recheck Part A (<code>sudo ss -ulpn 'sport = :53'</code> should be empty before Pi-hole starts).</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- STEP 6 -->
+    <article class="step" id="step-6" data-step="6" data-optional="false" data-open="true" data-done="false">
+      <button class="step-head" data-toggle>
+        <span class="step-num">Step 6</span>
+        <span class="step-title">Lock it down with a firewall</span>
+        <span class="step-chip core">core</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="step-done-wrap"><label><input type="checkbox" data-done-id="6"> Mark done</label></div>
+      <div class="step-body">
+        <p class="step-why">Default-deny before you open anything to the internet in Step 7 — DNS and admin ports should only ever answer your own LAN.</p>
+        <ol class="substeps">
+          <li><p>Base policy and LAN-only services:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow from 192.168.0.0/16 to any port 22 proto tcp    # SSH
+sudo ufw allow from 192.168.0.0/16 to any port 53               # DNS
+sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp  # Pi-hole UI</code></pre></div>
+          </li>
+          <li><p>Only if you're doing Step 7 (VPN): let tunnel peers reach DNS too, allow the box to forward their traffic out, and open the one WAN port:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box · VPN only</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>sudo ufw allow from 10.8.0.0/24 to any port 53
+sudo ufw default allow routed
+sudo ufw allow 51820/udp</code></pre></div>
+            <div class="callout">"Allow routed" is required for WireGuard traffic to forward — don't try to patch this with raw <code>iptables -A FORWARD</code> rules, they land after UFW's own DROP rule and get silently ignored.</div>
+          </li>
+          <li><p>Enable it:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>sudo ufw enable
+sudo ufw status verbose</code></pre></div>
+          </li>
+        </ol>
+        <div class="verify-box"><div class="vt">Verify</div><p style="font-size:13px;">Status shows 22/53/8080 limited to your LAN, and (if VPN) 51820/udp open to Anywhere — everything else denied.</p></div>
+      </div>
+    </article>
+
+    <!-- STEP 7 -->
+    <article class="step" id="step-7" data-step="7" data-optional="true" data-open="true" data-done="false">
+      <button class="step-head" data-toggle>
+        <span class="step-num">Step 7</span>
+        <span class="step-title">WireGuard VPN — your phone, from anywhere</span>
+        <span class="step-chip optional">optional</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="step-done-wrap"><label><input type="checkbox" data-done-id="7"> Mark done</label></div>
+      <div class="step-body">
+        <p class="step-why">A tunnel that terminates on your own box, not a VPN company's server — your phone's DNS goes through the same Pi-hole + Unbound stack on cellular as it does at home, and traffic exits from your home IP.</p>
+        <div class="callout danger">Not the same as a "1.1.1.1" or commercial VPN app — those send your DNS to that company's resolver instead, bypassing everything you just built.</div>
+        <ol class="substeps">
+          <li><p>Install and enable forwarding:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>sudo apt install -y wireguard
+printf 'net.ipv4.ip_forward=1\n' | sudo tee /etc/sysctl.d/99-wg-forward.conf
+sudo sysctl --system</code></pre></div>
+          </li>
+          <li><p>Generate server keys and write the config:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>wg genkey | sudo tee /etc/wireguard/server.key | wg pubkey | sudo tee /etc/wireguard/server.pub
+sudo chmod 600 /etc/wireguard/server.key
+
+sudo tee /etc/wireguard/wg0.conf &lt;&lt;EOF
+[Interface]
+Address = 10.8.0.1/24
+ListenPort = 51820
+PrivateKey = $(sudo cat /etc/wireguard/server.key)
+PostUp   = iptables -t nat -A POSTROUTING -o <span class="tok" data-tok="wan">eth0</span> -j MASQUERADE
+PostDown = iptables -t nat -D POSTROUTING -o <span class="tok" data-tok="wan">eth0</span> -j MASQUERADE
+
+# Add one [Peer] block per device — see next step
+EOF
+sudo chmod 600 /etc/wireguard/wg0.conf</code></pre></div>
+          </li>
+          <li><p>On your phone, install the official <b>WireGuard</b> app, create a tunnel, and copy its public key. Add a matching peer block on the box, then bring the tunnel up:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>sudo tee -a /etc/wireguard/wg0.conf &lt;&lt;EOF
+
+[Peer]
+PublicKey = PASTE_PHONE_PUBLIC_KEY_HERE
+AllowedIPs = 10.8.0.2/32
+EOF
+sudo systemctl enable --now wg-quick@wg0
+sudo wg show</code></pre></div>
+          </li>
+          <li><p>On the phone tunnel, set:</p>
+            <div class="table-wrap"><table class="field-table">
+              <tr><th>Field</th><th>Value</th></tr>
+              <tr><td>Server endpoint</td><td>your home's public IP (or a free DDNS name — see note) : 51820</td></tr>
+              <tr><td>DNS</td><td>10.8.0.1</td></tr>
+              <tr><td>Allowed IPs</td><td><code>0.0.0.0/0</code> — <b>not</b> <code>::/0</code></td></tr>
+              <tr><td>Persistent keepalive</td><td>25</td></tr>
+            </table></div>
+            <div class="callout">Adding <code>::/0</code> black-holes IPv6: the tunnel handshakes fine but pages that prefer IPv6 just hang. Leave IPv6 out.</div>
+          </li>
+          <li><p>Port-forward <code>51820/UDP</code> → <span class="tok" data-tok="box">192.168.1.50</span> on the router. If your ISP doesn't give a static public IP, register a free dynamic-DNS name (DuckDNS or No-IP) and use that as the endpoint instead of a raw IP.</p></li>
+        </ol>
+        <div class="verify-box">
+          <div class="vt">Verify — turn off Wi-Fi on the phone first, use cellular</div>
+          <p style="font-size:13px;">Connect the tunnel, then in order: <code>ping 10.8.0.1</code> (tunnel itself) → <code>ping 1.1.1.1</code> (forwarding works) → open a browser (DNS works). Each level that fails points at a different step above.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- STEP 8 -->
+    <article class="step" id="step-8" data-step="8" data-optional="true" data-open="true" data-done="false">
+      <button class="step-head" data-toggle>
+        <span class="step-num">Step 8</span>
+        <span class="step-title">Monitoring dashboard</span>
+        <span class="step-chip optional">optional</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="step-done-wrap"><label><input type="checkbox" data-done-id="8"> Mark done</label></div>
+      <div class="step-body">
+        <p class="step-why">Uptime Kuma watches DNS, the router, and the connection, and tells you the moment something breaks — instead of finding out when someone yells that the internet is down.</p>
+        <ol class="substeps">
+          <li><p>Install Docker first if you haven't (Step 3, above), then:</p>
+            <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>mkdir -p ~/uptime-kuma && cd ~/uptime-kuma
+cat > docker-compose.yml &lt;&lt;'EOF'
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    network_mode: host
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+EOF
+docker compose up -d</code></pre></div>
+          </li>
+          <li><p>Open <code class="mono">http://<span class="tok" data-tok="box">192.168.1.50</span>:3001</code> and create the admin account — do this from a trusted device, first account wins.</p></li>
+          <li><p>Add a few monitors (Add Monitor → type <code>DNS</code> or <code>HTTP(s)</code>):</p>
+            <div class="table-wrap"><table class="field-table">
+              <tr><th>Name</th><th>Type</th><th>Hostname</th><th>Resolver</th><th>Port</th></tr>
+              <tr><td>Unbound</td><td>DNS</td><td>cloudflare.com</td><td>127.0.0.1</td><td>5335</td></tr>
+              <tr><td>Pi-hole</td><td>DNS</td><td>cloudflare.com</td><td>127.0.0.1</td><td>53</td></tr>
+              <tr><td>Router</td><td>HTTP(s)</td><td><span class="tok" data-tok="router">192.168.1.1</span></td><td>—</td><td>—</td></tr>
+            </table></div>
+            <div class="callout">Put the IP alone in the Resolver field — port goes in the separate Port field, or you'll get an invalid double-port and flaky failures.</div>
+          </li>
+        </ol>
+        <div class="verify-box"><div class="vt">Verify</div><p style="font-size:13px;">All three monitors show green within a minute of saving.</p></div>
+      </div>
+    </article>
+
+    <!-- STEP 11 -->
+    <article class="step" id="step-11" data-step="11" data-optional="false" data-open="true" data-done="false">
+      <button class="step-head" data-toggle>
+        <span class="step-num">Step 11</span>
+        <span class="step-title">Point every device at the box</span>
+        <span class="step-chip core">core · do last</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="step-done-wrap"><label><input type="checkbox" data-done-id="11"> Mark done</label></div>
+      <div class="step-body">
+        <p class="step-why">This is the last thing you do — flip it on only once every earlier step verifies clean. It's the switch that makes your whole household use the box.</p>
+        <ol class="substeps">
+          <li><p>Open your router's admin page at <code class="mono tok" data-tok="router">192.168.1.1</code> and find <b>Internet Setup → DNS</b> (wording varies: "DNS Address" on Netgear, "DHCP DNS" on TP-Link/ASUS).</p></li>
+          <li><p>Set:</p>
+            <div class="table-wrap"><table class="field-table">
+              <tr><th>Field</th><th>Value</th></tr>
+              <tr><td>Primary DNS</td><td><code class="mono tok" data-tok="box">192.168.1.50</code></td></tr>
+              <tr><td>Secondary DNS</td><td><code class="mono">1.1.1.1</code> — pure failover; if the box ever goes down, the house stays online (just without ad-blocking) instead of losing internet entirely</td></tr>
+            </table></div>
+          </li>
+          <li><p>Save, then renew DHCP leases on your devices — easiest is toggling Wi-Fi off/on, or a router reboot forces it for everyone at once.</p></li>
+        </ol>
+        <div class="verify-box">
+          <div class="vt">Verify</div>
+          <div class="cmd"><div class="cmd-bar"><span>on any phone or laptop</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>nslookup example.com</code></pre></div>
+          <p style="font-size:12.5px; margin-top:6px;">The "Server" field in the reply must show <span class="tok" data-tok="box">192.168.1.50</span> — that's the whole house now asking your box, not the ISP.</p>
+        </div>
+      </div>
+    </article>
+
+  </main>
+
+  <section class="verify">
+    <div class="eyebrow">Once everything's checked off</div>
+    <h2>Full verification pass</h2>
+    <p class="lede" style="font-size:13.5px;">Run these in order on the box. Every line should come back exactly as noted before you trust the build.</p>
+    <div class="cmd"><div class="cmd-bar"><span>on the box</span><button class="copy-btn" data-copy>Copy</button></div><pre><code>systemctl status unbound                                    # active (running)
+dig @127.0.0.1 -p 5335 example.com +dnssec | grep "ad;"      # ad flag present
+docker ps                                                    # pihole (and uptime-kuma) Up
+dig @<span class="tok" data-tok="box">192.168.1.50</span> example.com +short                      # resolves through the full chain
+sudo ufw status verbose                                      # LAN-only, plus 51820/udp if VPN
+sudo wg show                                                 # interface + peers, if VPN
+nslookup example.com                                         # from any client — Server: <span class="tok" data-tok="box">192.168.1.50</span></code></pre></div>
+  </section>
+
+  <section class="faq">
+    <div class="eyebrow">If something's not working</div>
+    <h2>Troubleshooting</h2>
+    <details class="faq-item">
+      <summary>Ads still show up / DNS still points at the old server</summary>
+      <p>Client-side caching, not the box. Forget and rejoin the Wi-Fi network on that device, or reboot it — that forces a fresh DHCP lease with the new DNS setting.</p>
+    </details>
+    <details class="faq-item">
+      <summary>Pi-hole container won't bind port 53</summary>
+      <p>The systemd-resolved stub listener is still holding the port — go back to Step 4+5, Part A, and confirm <code>sudo ss -ulpn 'sport = :53'</code> is empty before starting Pi-hole.</p>
+    </details>
+    <details class="faq-item">
+      <summary>VPN connects but the phone has no internet</summary>
+      <p>Almost always one of two things: IP forwarding isn't enabled (recheck Step 7's <code>sysctl</code> line), or UFW's <code>allow routed</code> is missing (Step 6) — WireGuard traffic reaches the box but never gets forwarded back out.</p>
+    </details>
+    <details class="faq-item">
+      <summary>The box loses its IP after a power cut</summary>
+      <p>The DHCP reservation from Step 0 either wasn't saved or the router reset it. Re-check the reservation page — some routers drop custom reservations on a firmware update.</p>
+    </details>
+    <details class="faq-item">
+      <summary>Streaming (Netflix, YouTube) feels slower than before</summary>
+      <p>Fully recursive resolution is a few extra hops versus a big public resolver. If it bothers you, Unbound supports forwarding specific low-sensitivity domains to a fast encrypted resolver (Cloudflare over DNS-over-TLS) while keeping everything else — banking, email, health — fully private and recursive. That's a deliberate, deeper customization; the public reference implementation this guide is drawn from (<span class="mono">a777ance/localdns</span>) documents the exact split and the config file that does it, if you want to go further.</p>
+    </details>
+  </section>
+
+  <footer>
+    Built for a one-evening home DNS setup — Pi-hole (ad-blocking) → Unbound (private, DNSSEC-validated resolution), with optional WireGuard VPN and Uptime Kuma monitoring. Your fill-in values and checklist progress are stored only in this browser (<span class="mono">localStorage</span>) — nothing here is sent anywhere.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var STORE_KEY = 'dnsFieldGuide.v1';
+  var fields = ['fName','fRouter','fBox','fUser','fWan','fUpload','tVpn','tCake','tMon'];
+  var doneMap = {};
+  var openMap = {};
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return null;
+      return JSON.parse(raw);
+    }catch(e){ return null; }
+  }
+  function save(){
+    var data = {values:{}, done:doneMap, open:openMap};
+    fields.forEach(function(id){
+      var el = document.getElementById(id);
+      if(!el) return;
+      data.values[id] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }catch(e){}
+  }
+
+  var tokMap = { router:'fRouter', box:'fBox', user:'fUser', wan:'fWan', upload:'fUpload' };
+
+  function applyTokens(){
+    Object.keys(tokMap).forEach(function(tok){
+      var src = document.getElementById(tokMap[tok]);
+      if(!src) return;
+      var val = src.value.trim() || src.placeholder || '';
+      document.querySelectorAll('.tok[data-tok="'+tok+'"]').forEach(function(node){
+        node.textContent = val;
+      });
+    });
+    var rEl = document.getElementById('fRouter'), bEl = document.getElementById('fBox');
+    var dR = document.getElementById('dRouter'), dB = document.getElementById('dBox');
+    if(dR && rEl) dR.textContent = rEl.value.trim() || rEl.placeholder;
+    if(dB && bEl) dB.textContent = bEl.value.trim() || bEl.placeholder;
+  }
+
+  function updateOptionalVisibility(){
+    var vpnOn = document.getElementById('tVpn').checked;
+    var monOn = document.getElementById('tMon').checked;
+    var cakeWrap = document.getElementById('tCakeWrap');
+    var cakeInput = document.getElementById('tCake');
+    cakeWrap.classList.toggle('active', vpnOn);
+    if(!vpnOn){ cakeInput.checked = false; }
+
+    setStepHidden('7', !vpnOn);
+    setStepHidden('8', !monOn);
+    setStepHidden('1', !(vpnOn && cakeInput.checked));
+
+    buildToc();
+    updateProgress();
+  }
+
+  function setStepHidden(stepId, hidden){
+    var el = document.getElementById('step-'+stepId.replace('+','').replace(/\s/g,''));
+    if(!el){
+      document.querySelectorAll('.step').forEach(function(s){
+        if(s.getAttribute('data-step') === stepId){ el = s; }
+      });
+    }
+    if(el) el.setAttribute('data-hidden', hidden ? 'true' : 'false');
+  }
+
+  function stepEls(){
+    return Array.prototype.slice.call(document.querySelectorAll('.step'));
+  }
+
+  function buildToc(){
+    var list = document.getElementById('tocList');
+    list.innerHTML = '';
+    stepEls().forEach(function(step){
+      if(step.getAttribute('data-hidden') === 'true') return;
+      var stepId = step.getAttribute('data-step');
+      var title = step.querySelector('.step-title').textContent;
+      var isOpt = step.getAttribute('data-optional') === 'true';
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + step.id;
+      a.innerHTML = '<span class="n">Step ' + stepId + '</span><span>' + title + '</span>' +
+        (isOpt ? '<span class="chip step-chip optional">optional</span>' : '');
+      li.appendChild(a);
+      list.appendChild(li);
+    });
+  }
+
+  function updateProgress(){
+    var active = stepEls().filter(function(s){ return s.getAttribute('data-hidden') !== 'true'; });
+    var doneCount = active.filter(function(s){ return s.getAttribute('data-done') === 'true'; }).length;
+    var total = active.length;
+    var pct = total ? Math.round((doneCount/total)*100) : 0;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = doneCount + ' of ' + total + ' steps done';
+  }
+
+  function wireStepToggle(step){
+    var head = step.querySelector('[data-toggle]');
+    head.addEventListener('click', function(){
+      var open = step.getAttribute('data-open') === 'true';
+      step.setAttribute('data-open', open ? 'false' : 'true');
+      head.setAttribute('aria-expanded', open ? 'false' : 'true');
+    });
+    var doneBox = step.querySelector('[data-done-id]');
+    doneBox.addEventListener('change', function(){
+      var isDone = doneBox.checked;
+      step.setAttribute('data-done', isDone ? 'true' : 'false');
+      if(isDone) step.setAttribute('data-open', 'false');
+      doneMap[doneBox.getAttribute('data-done-id')] = isDone;
+      updateProgress();
+      save();
+    });
+  }
+
+  function wireCopyButtons(){
+    document.querySelectorAll('.copy-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var pre = btn.closest('.cmd').querySelector('pre');
+        var text = pre.innerText;
+        var done = function(){
+          var original = btn.textContent;
+          btn.textContent = 'Copied';
+          setTimeout(function(){ btn.textContent = original; }, 1400);
+        };
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(text).then(done).catch(function(){ fallbackCopy(text, done); });
+        } else {
+          fallbackCopy(text, done);
+        }
+      });
+    });
+  }
+  function fallbackCopy(text, cb){
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta);
+    cb();
+  }
+
+  function wireFields(){
+    fields.forEach(function(id){
+      var el = document.getElementById(id);
+      if(!el) return;
+      el.addEventListener('input', function(){ applyTokens(); save(); });
+      el.addEventListener('change', function(){
+        if(id === 'tVpn' || id === 'tMon' || id === 'tCake') updateOptionalVisibility();
+        save();
+      });
+    });
+  }
+
+  function restore(){
+    var data = load();
+    if(!data) return;
+    fields.forEach(function(id){
+      var el = document.getElementById(id);
+      if(!el || !(id in data.values)) return;
+      if(el.type === 'checkbox') el.checked = data.values[id];
+      else el.value = data.values[id];
+    });
+    if(data.done){
+      Object.keys(data.done).forEach(function(k){
+        if(!data.done[k]) return;
+        var box = document.querySelector('[data-done-id="'+k+'"]');
+        if(box){
+          box.checked = true;
+          var step = box.closest('.step');
+          step.setAttribute('data-done', 'true');
+          step.setAttribute('data-open', 'false');
+        }
+      });
+    }
+  }
+
+  document.getElementById('bulkToggle').addEventListener('click', function(){
+    var anyOpen = stepEls().some(function(s){ return s.getAttribute('data-open') === 'true' && s.getAttribute('data-hidden') !== 'true'; });
+    stepEls().forEach(function(s){
+      if(s.getAttribute('data-hidden') === 'true') return;
+      s.setAttribute('data-open', anyOpen ? 'false' : 'true');
+    });
+    this.textContent = anyOpen ? 'Expand all' : 'Collapse all';
+  });
+
+  stepEls().forEach(wireStepToggle);
+  wireCopyButtons();
+  wireFields();
+  restore();
+  applyTokens();
+  updateOptionalVisibility();
+})();
+</script>
+</body>
+</html>
