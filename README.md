@@ -15,3 +15,11 @@ via GitHub Pages (`docs/index.html`, deployed by `.github/workflows/pages.yml`).
 This is a standalone companion guide — a generalized version of the setup
 documented in full at [a777ance/localdns](https://github.com/a777ance/localdns),
 adapted so anyone can point it at their own house.
+
+---
+
+## 🌈 Bifrost
+
+This repo runs on **[Bifrost](https://a777ance.github.io/localDNS/bifrost.html)** — the
+A777ance keyboard-spatial command-composition schema, active from the first token of every
+session. The canonical spec lives in the public `localDNS` repo.
