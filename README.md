@@ -18,6 +18,22 @@ adapted so anyone can point it at their own house.
 
 ---
 
+## After setup — changing your box later
+
+This wizard gets you to a *first* working box. Once it's running, changing a config
+on it (say, tightening Unbound's `interface:` to loopback) is a different job with its
+own failure modes — a copy from a stale checkout that silently no-ops, a restart that
+reloads the old file and still reports healthy. That per-change procedure — sync the
+checkout → diff before overwrite → back up → validate → reload → verify the *effect* —
+is written up in the reference stack's
+**[Deploy Protocol](https://github.com/a777ance/localDNS/blob/main/docs/DEPLOY-PROTOCOL.md)**
+(with the backlog of staged changes in its
+[Deploy Queue](https://github.com/a777ance/localDNS/blob/main/docs/DEPLOY-QUEUE.md)).
+It's written for that specific reference box, but the six phases carry over to any box
+you build from this guide.
+
+---
+
 ## 🌈 Bifrost
 
 This repo runs on **[Bifrost](https://a777ance.github.io/localDNS/bifrost.html)** — the
